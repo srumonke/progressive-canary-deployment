@@ -23,10 +23,11 @@ This repository contains the Harness Git Experience configuration files for impl
 
 * **Harness Setup**: Requires a Harness account with the organization and project set to `default` and `default_project`.
 * **Environments**: Environments must exist  dev, qa, prod.
-* **Infrastructure**: Infrastructure definitions must exist for `dev_sk_ring0_infra`, `qa_sk_ring0_infra`, and `prod_sk_ring1_infra`.
+* **Infrastructure**: Infrastructure definitions must exist for `dev_sk_ring0_infra`,`dev_sk_ring1_infra` `qa_sk_ring0_infra`, and `prod_sk_ring1_infra`.
 * **Secrets**: A GitHub Personal Access Token must be stored as a Harness secret named `harness_gitpat`.
 
 ## External Resources
 
 * **Application Repository**: [harnesscd-example-apps](https://github.com/srumonke/harnesscd-example-apps)
+
 
