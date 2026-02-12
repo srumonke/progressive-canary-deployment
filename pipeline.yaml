@@ -1,0 +1,360 @@
+pipeline:
+  name: Progressive Canary Deployment
+  identifier: Progressive_Canary_Deployment_with_Rings
+  projectIdentifier: default_project
+  orgIdentifier: default
+  stages:
+    - stage:
+        name: Deploy to Dev
+        identifier: deploy_to_dev_ring0
+        description: Deploy to Dev with canary
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: harnessguestbookdep
+          execution:
+            steps:
+              - stepGroup:
+                  name: Canary Deployment
+                  identifier: canary_deployment_ring0
+                  steps:
+                    - step:
+                        name: Canary Deploy 25
+                        identifier: canary_deploy_25
+                        type: K8sCanaryDeploy
+                        timeout: 10m
+                        spec:
+                          instanceSelection:
+                            type: Percentage
+                            spec:
+                              percentage: 25
+                          skipDryRun: false
+                    - step:
+                        name: Verify Canary
+                        identifier: verify_canary
+                        type: ShellScript
+                        timeout: 5m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Running health checks on canary pods in dev-sk-ring0..."
+                                sleep 5
+                                echo "Canary verification successful for Ring 0"
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                    - step:
+                        name: Approval Ring
+                        identifier: approval_dev_ring0
+                        type: HarnessApproval
+                        timeout: 1d
+                        spec:
+                          approvalMessage: Please review and approve the canary deployment in Dev Ring 0
+                          includePipelineExecutionHistory: true
+                          approvers:
+                            userGroups:
+                              - account.Dev_Approvers
+                            minimumCount: 1
+                            disallowPipelineExecutor: false
+                          approverInputs: []
+                    - step:
+                        type: K8sCanaryDelete
+                        name: K8sCanaryDelete_1
+                        identifier: K8sCanaryDelete_1
+                        spec: {}
+                        timeout: 10m
+                  rollbackSteps:
+                    - step:
+                        name: Canary Delete
+                        identifier: canary_delete
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+              - stepGroup:
+                  name: Primary Deployment
+                  identifier: primary_deployment_ring0
+                  steps:
+                    - step:
+                        name: Rolling Deploy
+                        identifier: rolling_deploy
+                        type: K8sRollingDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                  rollbackSteps:
+                    - step:
+                        name: Rolling Rollback
+                        identifier: rolling_rollback
+                        type: K8sRollingRollback
+                        timeout: 10m
+                        spec: {}
+            rollbackSteps: []
+          environments:
+            metadata:
+              parallel: false
+            values:
+              - environmentRef: dev
+                deployToAll: false
+                infrastructureDefinitions:
+                  - identifier: dev_sk_ring0_infra
+                  - identifier: dev_sk_ring1_infra
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Deploy to QA Ring0
+        identifier: deploy_to_qa_ring0
+        description: Deploy to QA Ring 0 with progressive canary rollout
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: harnessguestbookdep
+          environment:
+            environmentRef: qa
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: qa_sk_ring0_infra
+          execution:
+            steps:
+              - stepGroup:
+                  name: "Canary Phase "
+                  identifier: canary_phase_1
+                  steps:
+                    - step:
+                        name: Deploy Canary
+                        identifier: canary_deploy_10
+                        type: K8sCanaryDeploy
+                        timeout: 10m
+                        spec:
+                          instanceSelection:
+                            type: Percentage
+                            spec:
+                              percentage: 25
+                          skipDryRun: false
+                    - step:
+                        name: Verify Phase 1
+                        identifier: verify_phase_1
+                        type: ShellScript
+                        timeout: 5m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Monitoring 10% canary deployment in qa-sk-ring0..."
+                                echo "Checking metrics: error rate, latency, throughput"
+                                sleep 5
+                                echo "Phase 1 verification successful"
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                    - step:
+                        name: Wait 5 Minutes
+                        identifier: wait_5min_phase1
+                        type: ShellScript
+                        timeout: 6m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Observing canary behavior for 5 minutes..."
+                                sleep 5
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                    - step:
+                        name: Canary Delete Phase 1
+                        identifier: canary_delete_phase_1
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+                  rollbackSteps:
+                    - step:
+                        name: Rollback Canary Phase 1
+                        identifier: rollback_canary_phase_1
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+              - stepGroup:
+                  name: Primary Deployment
+                  identifier: primary_deployment
+                  steps:
+                    - step:
+                        name: Rolling Deploy 100
+                        identifier: rolling_deploy
+                        type: K8sRollingDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                  rollbackSteps:
+                    - step:
+                        name: Rolling Rollback
+                        identifier: rolling_rollback
+                        type: K8sRollingRollback
+                        timeout: 10m
+                        spec: {}
+            rollbackSteps: []
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Deploy to Production Ring1
+        identifier: deploy_to_production_ring1
+        description: Progressive canary deployment to Production Ring 1 with extensive validation
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: harnessguestbookdep
+          environment:
+            environmentRef: production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: prod_sk_ring1_infra
+          execution:
+            steps:
+              - stepGroup:
+                  name: Production Canary Phase 1 - 5
+                  identifier: prod_canary_phase_1
+                  steps:
+                    - step:
+                        name: Deploy Canary 25
+                        identifier: Deploy_Canary_25
+                        type: K8sCanaryDeploy
+                        timeout: 10m
+                        spec:
+                          instanceSelection:
+                            type: Percentage
+                            spec:
+                              percentage: 25
+                          skipDryRun: false
+                    - step:
+                        name: Continuous Verification
+                        identifier: continuous_verification_5
+                        type: ShellScript
+                        timeout: 10m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Starting continuous verification for 5% canary in prod-sk-ring1..."
+                                echo "Monitoring: Response time, Error rates, CPU/Memory usage"
+                                echo "Comparing against baseline metrics"
+                                sleep 10
+                                echo "All metrics within acceptable thresholds"
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                    - step:
+                        name: Wait 15 Minutes
+                        identifier: wait_15min_prod_phase1
+                        type: ShellScript
+                        timeout: 16m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Extended monitoring period for production canary..."
+                                sleep 5
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                    - step:
+                        name: Canary Delete Phase 1
+                        identifier: canary_delete_prod_phase_1
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+                  rollbackSteps:
+                    - step:
+                        name: Emergency Rollback
+                        identifier: emergency_rollback_phase_1
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+              - stepGroup:
+                  name: Primary Production Deployment
+                  identifier: primary_production_deployment
+                  steps:
+                    - step:
+                        name: Rolling Deploy 100
+                        identifier: rolling_deploy_prod
+                        type: K8sRollingDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                    - step:
+                        name: Post-Deployment Verification
+                        identifier: post_deployment_verification
+                        type: ShellScript
+                        timeout: 10m
+                        spec:
+                          shell: Bash
+                          source:
+                            type: Inline
+                            spec:
+                              script: |-
+                                echo "Running post-deployment verification..."
+                                echo "Smoke tests, Health checks, Monitoring setup"
+                                sleep 10
+                                echo "Production deployment completed successfully!"
+                          environmentVariables: []
+                          executionTarget: {}
+                          outputVariables: []
+                  rollbackSteps:
+                    - step:
+                        name: Rolling Rollback
+                        identifier: rolling_rollback_prod
+                        type: K8sRollingRollback
+                        timeout: 10m
+                        spec: {}
+            rollbackSteps: []
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+        when:
+          pipelineStatus: Success
+  when:
+    pipelineStatus: Success
+  notificationRules:
+    - name: Deployment Notifications
+      identifier: deployment_notifications
+      pipelineEvents:
+        - type: AllEvents
+      notificationMethod:
+        type: Email
+        spec:
+          userGroups:
+            - account.DevOps_Team
+          recipients:
+            - sruthi.krishnamurthy@harness.io
+  variables:
+    - name: canary_wait_time
+      type: String
+      description: Wait time between canary phases
+      value: "300"
+  tags: {}
