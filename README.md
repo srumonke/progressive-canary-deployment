@@ -15,8 +15,8 @@ This repository contains the Harness Git Experience configuration files for impl
 
 ## Pipeline Stages
 
-1.  **Deploy to Dev**: Executes a 25% canary deployment to the `dev` environment followed by a mandatory manual approval from the `Dev_Approvers` group.
-2.  **Deploy to QA Ring0**: Performs a 25% canary rollout in the `qa` environment with an automated 5-minute observation period.
+1.  **Deploy to Dev**: Executes a 25% canary deployment to the `dev` environment in both infrastructure definitions `dev_sk_ring0_infra` and `dev_sk_ring1_infra`.
+2.  **Deploy to QA Ring0**: Performs a 25% canary rollout in the `qa` environment.
 3.  **Deploy to Production Ring1**: Implements a 25% canary deployment in `production` with continuous verification and a 15-minute wait period before the final rolling update.
 
 ## Requirements
@@ -29,3 +29,4 @@ This repository contains the Harness Git Experience configuration files for impl
 ## External Resources
 
 * **Application Repository**: [harnesscd-example-apps](https://github.com/srumonke/harnesscd-example-apps)
+
